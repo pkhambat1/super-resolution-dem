@@ -286,6 +286,7 @@ def visualize_results(image_inputs, probabilities, image_labels, first_label, se
 def main():
     # Read in Arctic DEM data
     images = get_data('data/Spllited_without_small_file_2m')
+    print(images.shape, tf.math.reduce_min(images), tf.math.reduce_max(images))
 
 
 if __name__ == '__main__':

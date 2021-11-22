@@ -20,10 +20,13 @@ def get_data(file_path):
             print(filename)
             with rasterio.open(file_path + '/' + filename) as dataset:
                 # Read the dataset's valid data mask as a ndarray.
-                mask = dataset.dataset_mask()
+                img = dataset.read()
+                img = tf.reshape(img, shape=(img.shape[1], img.shape[2]))
                 # slice mask
-                mask = mask[:500,:500]
-                data.append(mask)
+                img = img[:500,:500]
+                print(img.shape)
+                assert len(img) == 500 and len(img[0] == 500)
+                data.append(img)
     data = tf.convert_to_tensor(data, dtype=tf.float32)
     # Normalize
     data = data / 255
