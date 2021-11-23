@@ -17,36 +17,20 @@ class Model(tf.keras.Model):
         for you to fill out, but you are welcome to change them if you'd like.
         """
         super(Model, self).__init__()
+
+
         self.batch_size = 100
         self.num_classes = 2
         self.loss_list = []  # Append losses to this list in training so you can visualize loss vs time in main
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        # self.model = tf.keras.Sequential(
+        #     [
+        #         tf.keras.layers.Dense(2, activation="relu", name="layer1"),
+        #         tf.keras.layers.Dense(3, activation="relu", name="layer2"),
+        #         tf.keras.layers.Dense(4, name="layer3"),
+        #     ]
+        # )
 
-        # TODO: Initialize all hyperparameters
-        self.conv_w1 = tf.Variable(tf.random.truncated_normal([5, 5, 3, 16], stddev=.1))
-        self.conv_w2 = tf.Variable(tf.random.truncated_normal([5, 5, 16, 32], stddev=.1))
-        self.conv_w3 = tf.Variable(tf.random.truncated_normal([5, 5, 32, 64], stddev=.1))
-        self.conv_w4 = tf.Variable(tf.random.truncated_normal([5, 5, 64, 64], stddev=.1))
-        self.conv_w5 = tf.Variable(tf.random.truncated_normal([3, 3, 64, 128], stddev=.1))
-        self.conv_w6 = tf.Variable(tf.random.truncated_normal([3, 3, 128, 128], stddev=.1))
-        self.conv_w7 = tf.Variable(tf.random.truncated_normal([3, 3, 128, 128], stddev=.1))
-
-        self.conv_b1 = tf.Variable(tf.random.truncated_normal([16], stddev=.1))
-        self.conv_b2 = tf.Variable(tf.random.truncated_normal([32], stddev=.1))
-        self.conv_b3 = tf.Variable(tf.random.truncated_normal([64], stddev=.1))
-        self.conv_b4 = tf.Variable(tf.random.truncated_normal([64], stddev=.1))
-        self.conv_b5 = tf.Variable(tf.random.truncated_normal([128], stddev=.1))
-        self.conv_b6 = tf.Variable(tf.random.truncated_normal([128], stddev=.1))
-        self.conv_b7 = tf.Variable(tf.random.truncated_normal([128], stddev=.1))
-
-        self.W1 = tf.Variable(
-            tf.random.truncated_normal([128, 64],
-                                       stddev=.1))  # input dim, output dim. input dim should be output of flattened lyr
-        self.b1 = tf.Variable(tf.random.truncated_normal([64], stddev=.1))
-        self.W2 = tf.Variable(tf.random.truncated_normal([64, 32], stddev=.1))
-        self.b2 = tf.Variable(tf.random.truncated_normal([32], stddev=.1))
-        self.W3 = tf.Variable(tf.random.truncated_normal([32, 2], stddev=.1))
-        self.b3 = tf.Variable(tf.random.truncated_normal([2], stddev=.1))
 
         # TODO: Initialize all trainable parameters
 
@@ -287,7 +271,5 @@ def main():
     # Read in Arctic DEM data
     images = get_data('data/Spllited_without_small_file_2m')
     print(images.shape, tf.math.reduce_min(images), tf.math.reduce_max(images))
-
-
 if __name__ == '__main__':
     main()

@@ -97,3 +97,8 @@ webencodings==0.5.1
 Werkzeug==2.0.1
 widgetsnbextension==3.5.1
 wrapt==1.12.1
+
+rasterio~=1.2.10
+libtiff~=0.4.2
+tifffile~=2021.11.2
+scikit-image~=0.18.3
