@@ -4,23 +4,27 @@ import tensorflow as tf
 import os
 from tifffile import tifffile
 
-
 """
-Returns data: (N, H, W)
-
+:returns lr_images, hr_images: tuple of tensors sized (N, 50, 50), (N, 500, 500)
 """
-def get_data(filepath):
-    data = []
-    for filename in os.listdir(filepath):
-        if filename.split('.')[-1] in {'TIF', 'tiff'}:
-            image = tifffile.imread(os.path.join(filepath, filename))
-            # image = tifffile.imread(os.path.join(filepath, '..', '..', 'dummy_data', 'dog.tiff')) # TODO: delete later
-            image = image[:500,:500]
+def get_data(lr_images_filepath, hr_images_filepath):
+    lr_images, hr_images = [], []
+    assert len(sorted(os.listdir(lr_images_filepath))) == len(sorted(os.listdir(hr_images_filepath)))
+    for lr_filename, hr_filename in zip(sorted(os.listdir(lr_images_filepath))[:50], sorted(os.listdir(hr_images_filepath))): # TODO: Remove [:50] later
+        if lr_filename.split('.')[-1] in {'TIF', 'tiff'}:
+            print(lr_filename, hr_filename)
+            assert lr_filename == hr_filename # essential to map LR to HR correctly
+            lr_image = tifffile.imread(os.path.join(lr_images_filepath, lr_filename))
+            hr_image = tifffile.imread(os.path.join(hr_images_filepath, hr_filename))
             # eliminate off values
-            image = np.where(image >= 255, 0, image)
-            data.append(image)
+            lr_image = np.where(lr_image >= 255, 255/2, lr_image)
+            hr_image = np.where(hr_image >= 255, 255/2, hr_image)
+            lr_images.append(lr_image)
+            hr_images.append(hr_image)
 
-    data = tf.convert_to_tensor(data, dtype=tf.float32)
-    # # Normalize
-    data = data / 255
-    return data
+    lr_images = tf.convert_to_tensor(lr_images, dtype=tf.float32)
+    hr_images = tf.convert_to_tensor(hr_images, dtype=tf.float32)
+    # Normalize
+    lr_images /= 255
+    hr_images /= 255
+    return lr_images, hr_images

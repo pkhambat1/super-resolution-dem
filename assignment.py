@@ -1,11 +1,17 @@
 from __future__ import absolute_import
-from matplotlib import pyplot as plt
-from preprocess import get_data
 
 import os
+
+os.environ['TFF_CPP_MIN_LOG_LEVEL'] = '2'
+from matplotlib import pyplot as plt
+
+from preprocess import get_data
+
 import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.layers import Dense, Flatten, Reshape, Conv2D
 import numpy as np
-import random
 import math
 
 
@@ -18,23 +24,29 @@ class Model(tf.keras.Model):
         """
         super(Model, self).__init__()
 
-
-        self.batch_size = 100
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        self.batch_size = 126
+        self.W = 500  # img width
+        self.H = 500  # img height
         self.num_classes = 2
         self.loss_list = []  # Append losses to this list in training so you can visualize loss vs time in main
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
-        # self.model = tf.keras.Sequential(
-        #     [
-        #         tf.keras.layers.Dense(2, activation="relu", name="layer1"),
-        #         tf.keras.layers.Dense(3, activation="relu", name="layer2"),
-        #         tf.keras.layers.Dense(4, name="layer3"),
-        #     ]
-        # )
 
+        self.feed_forward = keras.Sequential(
+            [
+                Flatten(),
+                # keras.Input(shape=(self.W * self.H)),
+                # Conv2D(64, 3, strides=(1, 1), padding='same'),
+                # layers.BatchNormalization(),
+                # layers.LeakyReLU(),
+                # layers.Conv2D(64, 3, strides=(1, 1), padding='same'),
+                # layers.BatchNormalization(),
+                # layers.LeakyReLU(),
+            ]
+        )
 
         # TODO: Initialize all trainable parameters
 
-    def call(self, inputs, is_testing=False):
+    def call(self, inputs):
         """
         Runs a forward pass on an input batch of images.
 
@@ -42,86 +54,9 @@ class Model(tf.keras.Model):
         :param is_testing: a boolean that should be set to True only when you're doing Part 2 of the assignment and this function is being called during testing
         :return: logits - a matrix of shape (num_inputs, num_classes); during training, it would be (batch_size, 2)
         """
-        strides1 = [1, 2, 2, 1]
-        ksize1 = [1, 3, 3, 1]
-        ksize2 = [1, 2, 2, 1]
-        eps = 1e-5
-
-        # non-dense layer
-        # Convolution Layer 1
-        X = tf.nn.conv2d(inputs, self.conv_w1, strides=strides1, padding='SAME')
-        X = tf.nn.bias_add(X, self.conv_b1)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-        X = tf.nn.max_pool(X, padding='SAME', strides=strides1, ksize=ksize1)
-
-        # Convolution Layer 2
-        X = tf.nn.conv2d(X, self.conv_w2, strides=strides1, padding='SAME')
-        X = tf.nn.bias_add(X, self.conv_b2)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-        X = tf.nn.max_pool(X, padding='SAME', strides=strides1, ksize=ksize2)
-
-        # Convolution Layer 3
-        if is_testing:
-            X = conv2d(X, self.conv_w3, strides=[1, 1, 1, 1], padding='SAME')
-        else:
-            X = tf.nn.conv2d(X, self.conv_w3, strides=[1, 1, 1, 1], padding='SAME')
-
-        X = tf.nn.bias_add(X, self.conv_b3)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-        X = tf.nn.max_pool(X, padding='SAME', strides=strides1, ksize=ksize2)
-
-        # Convolution Layer 4
-        X = tf.nn.conv2d(X, self.conv_w4, strides=strides1, padding='SAME')
-        X = tf.nn.bias_add(X, self.conv_b4)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-        X = tf.nn.max_pool(X, padding='SAME', strides=strides1, ksize=ksize2)
-
-        # Convolution Layer 5
-        X = tf.nn.conv2d(X, self.conv_w5, strides=strides1, padding='SAME')
-        X = tf.nn.bias_add(X, self.conv_b5)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-        X = tf.nn.max_pool(X, padding='SAME', strides=strides1, ksize=ksize2)
-
-        # Convolution Layer 6
-        X = tf.nn.conv2d(X, self.conv_w6, strides=strides1, padding='SAME')
-        X = tf.nn.bias_add(X, self.conv_b6)
-        tf.nn.batch_normalization(X, mean=tf.nn.moments(X, axes=[0, 1, 2])[0],
-                                  variance=tf.nn.moments(X, axes=[0, 1, 2])[1], variance_epsilon=eps, offset=0,
-                                  scale=1)
-        X = tf.nn.relu(X)
-
-        # flatten to rm 2d relationships
-        X = tf.reshape(X, [X.shape[0], -1])  # (100, 80)
-
-        # try Relu on Dense layers and dropout in conv layers
-        # try data aug, ....
-        # Dense layer 1
-        X = tf.matmul(X, self.W1) + self.b1  # (100, 80) * (80, 40) = (100, 40)
-        X = tf.nn.relu(X)
-        X = tf.nn.dropout(X, rate=0.05)
-
-        # Dense layer 2
-        X = tf.matmul(X, self.W2) + self.b2  # (100, 40) * (40, 20) = (100, 20)
-        X = tf.nn.relu(X)
-        X = tf.nn.dropout(X, rate=0.05)
-
-        # Dense layer 3
-        X = tf.matmul(X, self.W3) + self.b3  # (100, 20) * (20, 2) = (100, 2)
+        X = self.feed_forward(inputs)
+        print(self.feed_forward.summary())
+        print(X.shape)
         return X
 
     def loss(self, logits, labels):
@@ -154,30 +89,13 @@ class Model(tf.keras.Model):
 
 
 def train(model, train_inputs, train_labels):
-    '''
-    Trains the model on all of the inputs and labels for one epoch. You should shuffle your inputs
-    and labels - ensure that they are shuffled in the same order using tf.gather or zipping.
-    To increase accuracy, you may want to use tf.image.random_flip_left_right on your
-    inputs before doing the forward pass. You should batch your inputs.
-
-    :param model: the initialized model to use for the forward pass and backward pass
-    :param train_inputs: train inputs (all inputs to use for training),
-    shape (num_inputs, width, height, num_channels)
-    :param train_labels: train labels (all labels to use for training),
-    shape (num_labels, num_classes)
-    :return: Optionally list of losses per batch to use for visualize_loss
-    '''
-    # assert not np.array_equal(train_inputs, tf.image.random_flip_left_right(train_inputs))
     train_inputs = tf.image.random_flip_left_right(train_inputs)
     # Implement backprop:
     with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        predictions = model(train_inputs)  # this calls the call function conveniently
-        loss = model.loss(predictions, train_labels)
-        model.loss_list.append(np.average(loss))
+        lr_images_hat = model.call(train_inputs)  # this calls the call function conveniently
+        loss = model.loss(lr_images_hat, train_labels)
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    accuracy = model.accuracy(predictions, train_labels)
-    print(accuracy)
 
 
 def test(model, test_inputs, test_labels):
@@ -269,7 +187,20 @@ def visualize_results(image_inputs, probabilities, image_labels, first_label, se
 
 def main():
     # Read in Arctic DEM data
-    images = get_data('data/Spllited_without_small_file_2m')
-    print(images.shape, tf.math.reduce_min(images), tf.math.reduce_max(images))
+    lr_images, hr_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
+    model = Model()
+
+    def get_batched(index, lr_images, hr_images):
+        return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
+
+    for _ in range(10):
+        # for each batch
+        for i in range(0, len(lr_images), model.batch_size):
+            batched_lr_images, batched_hr_images = get_batched(i, lr_images, hr_images)
+            train(model, batched_lr_images, batched_hr_images)
+
+    return None
+
+
 if __name__ == '__main__':
     main()
