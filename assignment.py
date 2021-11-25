@@ -157,9 +157,15 @@ class Model(tf.keras.Model):
         return value
 
     def mse(ori_high_res,pred_high_res):
+        '''
+        Mean squre error
+        '''
         return tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res)
 
     def mae(ori_high_res,pred_high_res):
+        '''
+        mean absolute error
+        '''
         mae = tf.keras.losses.MeanAbsoluteError(reduction=tf.keras.losses.Reduction.SUM)
         return mae(ori_high_res, pred_high_res).numpy()
 
