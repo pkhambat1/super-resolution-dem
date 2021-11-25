@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from _typeshed import Self
 
 import os
 
@@ -59,18 +60,127 @@ class Model(tf.keras.Model):
         print(X.shape)
         return X
 
-    def loss(self, logits, labels):
+    def tf_fspecial_gauss(self,size, sigma):
+        """Function to mimic the 'fspecial' gaussian MATLAB function
+        :param size:
+        :param sigma:
+        :return:
         """
-        Calculates the model cross-entropy loss after one forward pass.
-        Softmax is applied in this function.
+        x_data, y_data = np.mgrid[-size // 2 + 1:size // 2 + 1, -size // 2 + 1:size // 2 + 1]
 
-        :param logits: during training, a matrix of shape (batch_size, self.num_classes)
-        containing the result of multiple convolution and feed forward layers
-        :param labels: during training, matrix of shape (batch_size, self.num_classes) containing the train labels
-        :return: the loss of the model as a Tensor
+        x_data = np.expand_dims(x_data, axis=-1)
+        x_data = np.expand_dims(x_data, axis=-1)
+
+        y_data = np.expand_dims(y_data, axis=-1)
+        y_data = np.expand_dims(y_data, axis=-1)
+
+        x = tf.constant(x_data, dtype=tf.float32)
+        y = tf.constant(y_data, dtype=tf.float32)
+
+        g = tf.exp(-((x ** 2 + y ** 2) / (2.0 * sigma ** 2)))
+        return g / tf.reduce_sum(g)
+
+
+    def tf_ssim(self, ori_high_res, pred_high_res, cs_map=False, mean_metric=True, size=11, sigma=1.5):
         """
-        return tf.math.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels))
+        Compute structural similarity index metric.
+        https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
 
+        :param img1: an input image
+        :param img2: an input image
+        :param cs_map:
+        :param mean_metric:
+        :param size:
+        :param sigma:
+        :return: ssim
+        """
+        window = self.tf_fspecial_gauss(size, sigma)  # window shape [size, size]
+        K1 = 0.01
+        K2 = 0.03
+        L = 1  # depth of image (255 in case the image has a differnt scale)
+        C1 = (K1 * L) ** 2
+        C2 = (K2 * L) ** 2
+        mu1 = tf.nn.conv2d(ori_high_res, window, strides=[1, 1, 1, 1], padding='VALID')
+        mu2 = tf.nn.conv2d(pred_high_res, window, strides=[1, 1, 1, 1], padding='VALID')
+        mu1_sq = mu1 * mu1
+        mu2_sq = mu2 * mu2
+        mu1_mu2 = mu1 * mu2
+        sigma1_sq = tf.nn.conv2d(ori_high_res * ori_high_res, window, strides=[1, 1, 1, 1], padding='VALID') - mu1_sq
+        sigma2_sq = tf.nn.conv2d(pred_high_res * pred_high_res, window, strides=[1, 1, 1, 1], padding='VALID') - mu2_sq
+        sigma12 = tf.nn.conv2d(ori_high_res * pred_high_res, window, strides=[1, 1, 1, 1], padding='VALID') - mu1_mu2
+        if cs_map:
+            value = (((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) *
+                                                                (sigma1_sq + sigma2_sq + C2)),
+                    (2.0 * sigma12 + C2) / (sigma1_sq + sigma2_sq + C2))
+        else:
+            value = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) *
+                                                                (sigma1_sq + sigma2_sq + C2))
+
+        if mean_metric:
+            value = tf.reduce_mean(value)
+        return value
+
+
+    @DeprecationWarning
+    def tf_ms_ssim(ori_high_res, pred_high_res, mean_metric=True, level=5):
+        """
+        Compute multi-scale structural similarity index metric.
+        https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
+
+        :param img1:
+        :param img2:
+        :param mean_metric:
+        :param level:
+        :return: msssim
+        """
+        weight = tf.constant([0.0448, 0.2856, 0.3001, 0.2363, 0.1333], dtype=tf.float32)
+        mssim = []
+        mcs = []
+        for l in range(level):
+            ssim_map, cs_map = tf_ssim(ori_high_res, pred_high_res, cs_map=True, mean_metric=False)
+            mssim.append(tf.reduce_mean(ssim_map))
+            mcs.append(tf.reduce_mean(cs_map))
+            filtered_im1 = tf.nn.avg_pool(ori_high_res, [1, 2, 2, 1], [1, 2, 2, 1], padding='SAME')
+            filtered_im2 = tf.nn.avg_pool(pred_high_res, [1, 2, 2, 1], [1, 2, 2, 1], padding='SAME')
+            ori_high_res = filtered_im1
+            pred_high_res = filtered_im2
+
+        # list to tensor of dim D+1
+        mssim = tf.stack(mssim, axis=0)
+        mcs = tf.stack(mcs, axis=0)
+
+        value = (tf.reduce_prod(mcs[0:level - 1] ** weight[0:level - 1]) *
+                (mssim[level - 1] ** weight[level - 1]))
+
+        if mean_metric:
+            value = tf.reduce_mean(value)
+        return value
+
+    def mse(ori_high_res,pred_high_res):
+        return tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res)
+
+    def mae(ori_high_res,pred_high_res):
+        mae = tf.keras.losses.MeanAbsoluteError(reduction=tf.keras.losses.Reduction.SUM)
+        return mae(ori_high_res, pred_high_res).numpy()
+
+
+
+    def tf_psnr(mse):
+        """
+        PSNR is Peek Signal to Noise Ratio, which is similar to mean squared error.
+
+        It can be calculated as
+        PSNR = 20 * log10(MAXp) - 10 * log10(MSE)
+
+        When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
+        However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
+        Thus we remove that component completely and only compute the remaining MSE component.
+
+        Modify from https://github.com/titu1994/Image-Super-Resolution
+        """
+        return -10. * tf.log(mse) / tf.log(10.)
+
+    
     def accuracy(self, logits, labels):
         """
         Calculates the model's prediction accuracy by comparing
@@ -187,7 +297,7 @@ def visualize_results(image_inputs, probabilities, image_labels, first_label, se
 
 def main():
     # Read in Arctic DEM data
-    lr_images, hr_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
+    lr_images, hr_images = get_data('H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\ArcticDEM_20m_lr', 'H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\ArcticDEM_2m_hr')
     model = Model()
 
     def get_batched(index, lr_images, hr_images):
