@@ -199,12 +199,22 @@ class Model(tf.keras.Model):
         return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
 
 
-def train(model, train_inputs, train_labels):
+def train(model, train_inputs, train_labels, mode="mae"):
     train_inputs = tf.image.random_flip_left_right(train_inputs)
     # Implement backprop:
     with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        lr_images_hat = model.call(train_inputs)  # this calls the call function conveniently
-        loss = model.loss(lr_images_hat, train_labels)
+        predicted_image = model.call(train_inputs) 
+         # this calls the call function conveniently
+        if mode == "mae":
+            loss = model.mae(train_inputs,predicted_image)
+        elif mode == "psnr":
+            loss=model.psnr(train_inputs,predicted_image)
+        elif mode=="mse":
+            loss=model.mse(train_inputs,predicted_image)
+        elif mode=="tf_ssim":
+            loss=model.tf_ssim(train_inputs,predicted_image)
+        elif mode=="tf_ms_ssim":
+            loss=model.tf_ms_ssim(train_inputs,predicted_image)
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
