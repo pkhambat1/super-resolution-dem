@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-#from _typeshed import Self
+# from _typeshed import Self
 
 import os
 
@@ -11,13 +11,13 @@ from preprocess import get_data
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from tensorflow.keras.layers import Dense, Flatten, Reshape, Conv2D
+from tensorflow.keras.layers import Dense, Flatten, Reshape, Conv2D, ReLU, Input
 import numpy as np
 import math
 
 
 class Model(tf.keras.Model):
-    def __init__(self,upscale_factor):
+    def __init__(self, upscale_factor):
         self.upscale_factor = int(upscale_factor)
         """
         This model class will contain the architecture for your CNN that
@@ -25,38 +25,26 @@ class Model(tf.keras.Model):
         for you to fill out, but you are welcome to change them if you'd like.
         """
         super(Model, self).__init__()
-
-        self.optimizer = tf.keras.optimizers.RMSprop(learning_rate=1e-3)
-        self.batch_size = 126
-        self.W = 500  # img width
-        self.H = 500  # img height
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        self.batch_size = 128
+        self.W = 50  # img width
+        self.H = 50  # img height
         self.num_classes = 2
         self.loss_list = []  # Append losses to this list in training so you can visualize loss vs time in main
-
-        # self.feed_forward = keras.Sequential(
-        #     [
-        #         Flatten(),
-        #         # keras.Input(shape=(self.W * self.H)),
-        #         # Conv2D(64, 3, strides=(1, 1), padding='same'),
-        #         # layers.BatchNormalization(),
-        #         # layers.LeakyReLU(),
-        #         # layers.Conv2D(64, 3, strides=(1, 1), padding='same'),
-        #         # layers.BatchNormalization(),
-        #         # layers.LeakyReLU(),
-        #     ]
-        # )
-        self.relu=tf.keras.layers.ReLU()
-        self.conv1=tf.keras.layers.Conv2D( 64, kernel_size = 5, padding = "same")
-        self.conv2_1 = tf.keras.layers.Conv2D( 64, kernel_size = 3, padding = "same")
-        self.conv2_2 = tf.keras.layers.Conv2D( 64, kernel_size = 3, padding = "same")
-        self.conv2_3 = tf.keras.layers.Conv2D( 64, kernel_size = 3, padding = "same")
-        self.conv3 = tf.keras.layers.Conv2D( 32, kernel_size = 3, padding = "same")
-        self.conv4 = tf.keras.layers.Conv2D(int(self.upscale_factor **2), kernel_size = 3, padding = "same")
-        #self.pixel_shuffle = tf.nn.depth_to_space(up)
-        self.conv5 = tf.keras.layers.Conv2D(1, kernel_size = 1, padding = "same")
-        #self.weight_init()
-
-
+        self.feed_forward = keras.Sequential(
+            [
+                Reshape(target_shape=(self.W, self.H, 1)),
+                Input(shape=(self.W, self.H, 1)),
+                Conv2D(64, kernel_size=5, padding="same", activation='relu'),
+                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
+                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
+                Conv2D(64, kernel_size=3, padding="same",activation='relu'),
+                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
+                Conv2D(32, kernel_size=3, padding="same", activation='relu'),
+                Conv2D(int(self.upscale_factor ** 2), kernel_size=3, padding="same", activation='relu'),
+            ]
+        )
+        self.conv5 = tf.keras.layers.Conv2D(1, kernel_size=1, padding="same")
         # TODO: Initialize all trainable parameters
 
     def call(self, inputs):
@@ -67,34 +55,56 @@ class Model(tf.keras.Model):
         :param is_testing: a boolean that should be set to True only when you're doing Part 2 of the assignment and this function is being called during testing
         :return: logits - a matrix of shape (num_inputs, num_classes); during training, it would be (batch_size, 2)
         """
-        '''X = self.feed_forward(inputs)
-        print(self.feed_forward.summary())
-        print(X.shape)
-        return X'''
-        print ("input_shape",inputs.shape)
-        inputs=tf.reshape(inputs,shape=(-1, 50, 50, 1))
-        out = self.relu(self.conv1(inputs))
-        #print (out)
-        out = self.relu(self.conv2_1(out))
-        out = self.relu(self.conv2_2(out))
-        out = self.relu(self.conv2_3(out))
-        out = self.relu(self.conv3(out))
-        #print(out)
-        out = self.relu(self.conv4(out))
-        
-        #print(out)
-
-
-        out = tf.nn.depth_to_space(out,self.upscale_factor)
-        #print (out)
-        #out = self.conv5(out)
-        #print (out)
-
-        out=tf.reshape(out,shape=(-1,500,500))
+        out = self.feed_forward(inputs)
+        self.feed_forward.summary()
+        out = tf.nn.depth_to_space(out, self.upscale_factor)
+        # out = self.conv5(out)
+        out = tf.reshape(out, shape=(-1, 500, 500))
         return out
 
+def accuracy(logits, labels):
+        """
+        Calculates the model's prediction accuracy by comparing
+        logits to correct labels – no need to modify this.
 
-    def tf_fspecial_gauss(self,size, sigma):
+        :param logits: a matrix of size (num_inputs, self.num_classes); during training, this will be (batch_size, self.num_classes)
+        containing the result of multiple convolution and feed forward layers
+        :param labels: matrix of size (num_labels, self.num_classes) containing the answers, during training, this will be (batch_size, self.num_classes)
+
+        NOTE: DO NOT EDIT
+
+        :return: the accuracy of the model as a Tensor
+        """
+        correct_predictions = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+        return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+
+
+def loss_function(label, predicted_image):
+
+
+    def tf_ssim(ori_high_res, pred_high_res, cs_map=False, mean_metric=True, size=11, sigma=1.5):
+        """
+        Compute structural similarity index metric.
+        https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
+
+        :param img1: an input image
+        :param img2: an input image
+        :param cs_map:
+        :param mean_metric:
+        :param size:
+        :param sigma:
+        :return: ssim
+        """
+        ssim = tf.image.ssim(ori_high_res, pred_high_res, max_val=1.0)
+        return tf.reduce_sum(ssim)
+
+    def mse(ori_high_res, pred_high_res):
+        '''
+        Mean squre error
+        '''
+        return tf.reduce_mean(tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res))
+
+    def tf_fspecial_gauss(size, sigma):
         """Function to mimic the 'fspecial' gaussian MATLAB function
         :param size:
         :param sigma:
@@ -114,69 +124,7 @@ class Model(tf.keras.Model):
         g = tf.exp(-((x ** 2 + y ** 2) / (2.0 * sigma ** 2)))
         return g / tf.reduce_sum(g)
 
-
-    def tf_ssim(self, ori_high_res, pred_high_res, cs_map=False, mean_metric=True, size=11, sigma=1.5):
-        """
-        Compute structural similarity index metric.
-        https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
-
-        :param img1: an input image
-        :param img2: an input image
-        :param cs_map:
-        :param mean_metric:
-        :param size:
-        :param sigma:
-        :return: ssim
-        """
-        #print (ori_high_res)
-        #print (ori_high_res,pred_high_res)
-        ssim=tf.image.ssim(ori_high_res, pred_high_res, max_val=1.0)
-        return tf.reduce_sum(ssim)
-        #return (ssim)
-
-
-    #@DeprecationWarning
-    # def tf_ms_ssim(self,ori_high_res, pred_high_res, mean_metric=True, level=5):
-    #     """
-    #     Compute multi-scale structural similarity index metric.
-    #     https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
-
-    #     :param img1:
-    #     :param img2:
-    #     :param mean_metric:
-    #     :param level:
-    #     :return: msssim
-    #     """
-    #     weight = tf.constant([0.0448, 0.2856, 0.3001, 0.2363, 0.1333], dtype=tf.float32)
-    #     mssim = []
-    #     mcs = []
-    #     for l in range(level):
-    #         ssim_map, cs_map = self.tf_ssim(ori_high_res, pred_high_res, cs_map=True, mean_metric=False)
-    #         mssim.append(tf.reduce_mean(ssim_map))
-    #         mcs.append(tf.reduce_mean(cs_map))
-    #         filtered_im1 = tf.nn.avg_pool(ori_high_res, 2, 2, padding='SAME')
-    #         filtered_im2 = tf.nn.avg_pool(pred_high_res, 2, 2, padding='SAME')
-    #         ori_high_res = filtered_im1
-    #         pred_high_res = filtered_im2
-
-    #     # list to tensor of dim D+1
-    #     mssim = tf.stack(mssim, axis=0)
-    #     mcs = tf.stack(mcs, axis=0)
-
-    #     value = (tf.reduce_prod(mcs[0:level - 1] ** weight[0:level - 1]) *
-    #             (mssim[level - 1] ** weight[level - 1]))
-
-    #     if mean_metric:
-    #         value = tf.reduce_mean(value)
-    #     return value
-
-    def mse(self,ori_high_res,pred_high_res):
-        '''
-        Mean squre error
-        '''
-        return tf.reduce_mean(tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res))
-
-    def mae(self,ori_high_res,pred_high_res):
+    def mae(ori_high_res, pred_high_res):
         '''
         mean absolute error
         '''
@@ -186,64 +134,38 @@ class Model(tf.keras.Model):
         # print (mean_ae)
         mae = tf.keras.metrics.mean_absolute_error(ori_high_res, pred_high_res)
         return tf.reduce_mean(mae)
-    
 
-
-
-    def tf_psnr(self,ori_high_res,pred_high_res):
+    def tf_psnr(ori_high_res, pred_high_res):
         """
         PSNR is Peek Signal to Noise Ratio, which is similar to mean squared error.
 
         Adopted from "https://www.tensorflow.org/api_docs/python/tf/image/psnr"
 
         """
-        psnr=tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0, name=None)
+        psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0, name=None)
         return psnr
 
-    
-    def accuracy(self, logits, labels):
-        """
-        Calculates the model's prediction accuracy by comparing
-        logits to correct labels – no need to modify this.
+    return mae(label, predicted_image)
+    # return tf.sqrt(mse(label, predicted_image))
+    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image))
+    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)
 
-        :param logits: a matrix of size (num_inputs, self.num_classes); during training, this will be (batch_size, self.num_classes)
-        containing the result of multiple convolution and feed forward layers
-        :param labels: matrix of size (num_labels, self.num_classes) containing the answers, during training, this will be (batch_size, self.num_classes)
-
-        NOTE: DO NOT EDIT
-
-        :return: the accuracy of the model as a Tensor
-        """
-        correct_predictions = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
-        return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
-
-
-def train(model, train_inputs, train_labels, mode="mae"):
-    num_examples=tf.range(start=0, limit=tf.shape(train_inputs)[0], dtype=tf.int32)
+def train(model, train_inputs, train_labels):
+    assert train_inputs.shape[0] == model.batch_size
+    num_examples = tf.range(start=0, limit=model.batch_size, dtype=tf.int32)
     shuffle_indices = tf.random.shuffle(num_examples)
-    train_data=tf.gather(train_inputs,shuffle_indices)
-    label=tf.gather(train_labels,shuffle_indices)
-    # print (label)
-    # num_batches=train_data.shape[0]/model.batch_size
-    # inputs=np.split(train_data,int(num_batches),0) #Used this method after consulting to TA's
-    # labels=np.split(label,int(num_batches),0)
-    # for this_inputs,this_labels in zip(inputs,labels):
+    train_data = tf.gather(train_inputs, shuffle_indices)
+    label_images = tf.gather(train_labels, shuffle_indices)
     with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        predicted_image = model.call(train_data) 
-            # this calls the call function conveniently
-        if mode == "mae":
-            loss = model.mae(label,predicted_image)
-        elif mode == "psnr":
-            loss=model.tf_psnr(label,predicted_image)
-        elif mode=="mse":
-            loss=model.mse(label,predicted_image)
-        elif mode=="tf_ssim":
-            loss=model.tf_ssim(label,predicted_image)
-        elif mode=="tf_ms_ssim":
-            loss=model.tf_ms_ssim(label,predicted_image)
+        predicted_images = model.call(train_data)
+        _, axs = plt.subplots(2)
+        # fig.suptitle('Predicted (L), Ground Truth (R)')
+        axs[0].imshow(predicted_images[0])
+        axs[1].imshow(label_images[0])
+        loss = loss_function(label_images, predicted_images)
+    model.loss_list.append(loss)
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    print (loss) 
 
 
 def test(model, test_inputs, test_labels):
@@ -335,19 +257,20 @@ def visualize_results(image_inputs, probabilities, image_labels, first_label, se
 
 def main():
     # Read in Arctic DEM data
-    lr_images, hr_images = get_data('H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\ArcticDEM_20m_lr', 'H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\ArcticDEM_2m_hr')
+    lr_images, hr_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
     model = Model(upscale_factor=10)
 
     def get_batched(index, lr_images, hr_images):
         return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
 
-
-    for _ in range(25):
+    NUM_EPOCHS = 3
+    for ep in range(NUM_EPOCHS):
         # for each batch
-        for i in range(0, len(lr_images), model.batch_size):
+        for i in range(0, len(lr_images) - model.batch_size, model.batch_size):
+            print('Epoch ', ep)
             batched_lr_images, batched_hr_images = get_batched(i, lr_images, hr_images)
-            train(model, batched_lr_images, batched_hr_images,mode="mse")
-
+            train(model, batched_lr_images, batched_hr_images)
+            visualize_loss(model.loss_list)
     return None
 
 

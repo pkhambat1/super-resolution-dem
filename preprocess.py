@@ -10,9 +10,8 @@ from tifffile import tifffile
 def get_data(lr_images_filepath, hr_images_filepath):
     lr_images, hr_images = [], []
     assert len(sorted(os.listdir(lr_images_filepath))) == len(sorted(os.listdir(hr_images_filepath)))
-    for lr_filename, hr_filename in zip(sorted(os.listdir(lr_images_filepath))[:50], sorted(os.listdir(hr_images_filepath))): # TODO: Remove [:50] later
+    for lr_filename, hr_filename in zip(sorted(os.listdir(lr_images_filepath)), sorted(os.listdir(hr_images_filepath))): # TODO: Remove [:50] later
         if lr_filename.split('.')[-1] in {'TIF', 'tiff'}:
-            print(lr_filename, hr_filename)
             assert lr_filename == hr_filename # essential to map LR to HR correctly
             lr_image = tifffile.imread(os.path.join(lr_images_filepath, lr_filename))
             hr_image = tifffile.imread(os.path.join(hr_images_filepath, hr_filename))
