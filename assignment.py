@@ -1,69 +1,17 @@
 from __future__ import absolute_import
-# from _typeshed import Self
 
-import os
-
-os.environ['TFF_CPP_MIN_LOG_LEVEL'] = '2'
 from matplotlib import pyplot as plt
 
+from CnnModel import CnnModel
 from preprocess import get_data
 
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.layers import Dense, Flatten, Reshape, Conv2D, ReLU, Input
+
 import numpy as np
-import math
 
-
-class Model(tf.keras.Model):
-    def __init__(self, upscale_factor):
-        self.upscale_factor = int(upscale_factor)
-        """
-        This model class will contain the architecture for your CNN that
-        classifies images. We have left in variables in the constructor
-        for you to fill out, but you are welcome to change them if you'd like.
-        """
-        super(Model, self).__init__()
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
-        self.batch_size = 128
-        self.W = 50  # img width
-        self.H = 50  # img height
-        self.num_classes = 2
-        self.loss_list = []  # Append losses to this list in training so you can visualize loss vs time in main
-        self.feed_forward = keras.Sequential(
-            [
-                Reshape(target_shape=(self.W, self.H, 1)),
-                Input(shape=(self.W, self.H, 1)),
-                Conv2D(64, kernel_size=5, padding="same", activation='relu'),
-                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
-                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
-                Conv2D(64, kernel_size=3, padding="same",activation='relu'),
-                Conv2D(64, kernel_size=3, padding="same", activation='relu'),
-                Conv2D(32, kernel_size=3, padding="same", activation='relu'),
-                Conv2D(int(self.upscale_factor ** 2), kernel_size=3, padding="same", activation='relu'),
-            ]
-        )
-        self.conv5 = tf.keras.layers.Conv2D(1, kernel_size=1, padding="same")
-        # TODO: Initialize all trainable parameters
-
-    def call(self, inputs):
-        """
-        Runs a forward pass on an input batch of images.
-
-        :param inputs: images, shape of (num_inputs, 32, 32, 3); during training, the shape is (batch_size, 32, 32, 3)
-        :param is_testing: a boolean that should be set to True only when you're doing Part 2 of the assignment and this function is being called during testing
-        :return: logits - a matrix of shape (num_inputs, num_classes); during training, it would be (batch_size, 2)
-        """
-        out = self.feed_forward(inputs)
-        self.feed_forward.summary()
-        out = tf.nn.depth_to_space(out, self.upscale_factor)
-        # out = self.conv5(out)
-        out = tf.reshape(out, shape=(-1, 500, 500))
-        return out
 
 def accuracy(logits, labels):
-        """
+    """
         Calculates the model's prediction accuracy by comparing
         logits to correct labels – no need to modify this.
 
@@ -75,32 +23,25 @@ def accuracy(logits, labels):
 
         :return: the accuracy of the model as a Tensor
         """
-        correct_predictions = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
-        return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+    correct_predictions = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+    return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
 
 
-def loss_function(label, predicted_image):
+def loss_function(label_images, predicted_images):
+    def tf_ssim_multiscale(ori_high_res, pred_high_res):
+        ori_high_res = tf.expand_dims(ori_high_res, axis=3)
+        pred_high_res = tf.expand_dims(pred_high_res, axis=3)
+        print('start')
+        print('tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.)',
+              tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.))
+        return tf.reduce_mean(tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.))
 
-
-    def tf_ssim(ori_high_res, pred_high_res, cs_map=False, mean_metric=True, size=11, sigma=1.5):
-        """
-        Compute structural similarity index metric.
-        https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
-
-        :param img1: an input image
-        :param img2: an input image
-        :param cs_map:
-        :param mean_metric:
-        :param size:
-        :param sigma:
-        :return: ssim
-        """
-        ssim = tf.image.ssim(ori_high_res, pred_high_res, max_val=1.0)
-        return tf.reduce_sum(ssim)
+    def tf_ssim(ori_high_res, pred_high_res):
+        return tf.reduce_mean(tf.image.ssim(ori_high_res, pred_high_res, max_val=1.))
 
     def mse(ori_high_res, pred_high_res):
         '''
-        Mean squre error
+        Mean square error
         '''
         return tf.reduce_mean(tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res))
 
@@ -145,24 +86,38 @@ def loss_function(label, predicted_image):
         psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0, name=None)
         return psnr
 
-    return mae(label, predicted_image)
-    # return tf.sqrt(mse(label, predicted_image))
-    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image))
+    return 0.0 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + 1.0 * tf.sqrt(
+        mse(label_images, predicted_images))
+    # return .25 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + .75 * tf.sqrt(mse(label_images, predicted_images))
+    # return tf_ssim(label, predicted_image)
+    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)
 
-def train(model, train_inputs, train_labels):
+
+def visualize_sr(input_images, predicted_images, train_labels):
+    fig, axs = plt.subplots(1, 3)
+    fig.suptitle("Visualizing SR")
+    axs[0].imshow(input_images[0], cmap='gray')
+    axs[0].set_title('LR Input')
+    axs[1].imshow(predicted_images[0], cmap='gray')
+    axs[1].set_title('Predicted HR Output')
+    axs[2].imshow(train_labels[0], cmap='gray')
+    axs[2].set_title('Actual HR Input')
+    plt.show()
+
+
+def train(model, train_inputs, train_labels, should_visualize_sr=False):
     assert train_inputs.shape[0] == model.batch_size
-    num_examples = tf.range(start=0, limit=model.batch_size, dtype=tf.int32)
+    num_examples = tf.range(start=0, limit=model.batch_size)
     shuffle_indices = tf.random.shuffle(num_examples)
-    train_data = tf.gather(train_inputs, shuffle_indices)
-    label_images = tf.gather(train_labels, shuffle_indices)
+    train_inputs = tf.gather(train_inputs, shuffle_indices)
+    train_labels = tf.gather(train_labels, shuffle_indices)
     with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        predicted_images = model.call(train_data)
-        _, axs = plt.subplots(2)
-        # fig.suptitle('Predicted (L), Ground Truth (R)')
-        axs[0].imshow(predicted_images[0])
-        axs[1].imshow(label_images[0])
-        loss = loss_function(label_images, predicted_images)
+        predicted_images = model.call(train_inputs)
+        loss = loss_function(train_labels, predicted_images)
+    print("Loss", loss)
+    if should_visualize_sr:
+        visualize_sr(train_inputs, predicted_images, train_labels)
     model.loss_list.append(loss)
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -205,73 +160,22 @@ def visualize_loss(losses):
     plt.show()
 
 
-def visualize_results(image_inputs, probabilities, image_labels, first_label, second_label):
-    """
-    Uses Matplotlib to visualize the correct and incorrect results of our model.
-    :param image_inputs: image data from get_data(), limited to 50 images, shape (50, 32, 32, 3)
-    :param probabilities: the output of model.call(), shape (50, num_classes)
-    :param image_labels: the labels from get_data(), shape (50, num_classes)
-    :param first_label: the name of the first class, "cat"
-    :param second_label: the name of the second class, "dog"
-
-    NOTE: DO NOT EDIT
-
-    :return: doesn't return anything, two plots should pop-up, one for correct results,
-    one for incorrect results
-    """
-
-    # Helper function to plot images into 10 columns
-    def plotter(image_indices, label):
-        nc = 10
-        nr = math.ceil(len(image_indices) / 10)
-        fig = plt.figure()
-        fig.suptitle("{} Examples\nPL = Predicted Label\nAL = Actual Label".format(label))
-        for i in range(len(image_indices)):
-            ind = image_indices[i]
-            ax = fig.add_subplot(nr, nc, i + 1)
-            ax.imshow(image_inputs[ind], cmap="Greys")
-            pl = first_label if predicted_labels[ind] == 0.0 else second_label
-            al = first_label if np.argmax(
-                image_labels[ind], axis=0) == 0 else second_label
-            ax.set(title="PL: {}\nAL: {}".format(pl, al))
-            plt.setp(ax.get_xticklabels(), visible=False)
-            plt.setp(ax.get_yticklabels(), visible=False)
-            ax.tick_params(axis='both', which='both', length=0)
-
-    predicted_labels = np.argmax(probabilities, axis=1)
-    num_images = image_inputs.shape[0]
-
-    # Separate correct and incorrect images
-    correct = []
-    incorrect = []
-    for i in range(num_images):
-        if predicted_labels[i] == np.argmax(image_labels[i], axis=0):
-            correct.append(i)
-        else:
-            incorrect.append(i)
-
-    plotter(correct, 'Correct')
-    plotter(incorrect, 'Incorrect')
-    plt.show()
-
-
 def main():
     # Read in Arctic DEM data
-    lr_images, hr_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
-    model = Model(upscale_factor=10)
+    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
+    model = CnnModel(upscale_factor=10)
 
     def get_batched(index, lr_images, hr_images):
         return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
 
-    NUM_EPOCHS = 3
+    NUM_EPOCHS = 100
     for ep in range(NUM_EPOCHS):
         # for each batch
-        for i in range(0, len(lr_images) - model.batch_size, model.batch_size):
-            print('Epoch ', ep)
-            batched_lr_images, batched_hr_images = get_batched(i, lr_images, hr_images)
-            train(model, batched_lr_images, batched_hr_images)
-            visualize_loss(model.loss_list)
-    return None
+        print('Epoch ', ep)
+        for i in range(0, len(lr_train_images) - model.batch_size, model.batch_size):
+            batched_lr_images, batched_hr_images = get_batched(i, lr_train_images, hr_train_images)
+            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=i == 0)
+            # visualize_loss(model.loss_list)
 
 
 if __name__ == '__main__':
