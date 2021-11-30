@@ -8,6 +8,7 @@ from preprocess import get_data
 import tensorflow as tf
 
 import numpy as np
+from keras.applications.vgg16 import VGG16
 
 
 def accuracy(logits, labels):
@@ -94,9 +95,9 @@ def loss_function(label_images, predicted_images):
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)
 
 
-def visualize_sr(input_images, predicted_images, train_labels):
+def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
     fig, axs = plt.subplots(1, 3)
-    fig.suptitle("Visualizing SR")
+    fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
     axs[0].imshow(input_images[0], cmap='gray')
     axs[0].set_title('LR Input')
     axs[1].imshow(predicted_images[0], cmap='gray')
@@ -106,7 +107,7 @@ def visualize_sr(input_images, predicted_images, train_labels):
     plt.show()
 
 
-def train(model, train_inputs, train_labels, should_visualize_sr=False):
+def train(model, train_inputs, train_labels, should_visualize_sr, epoch, batch_num):
     assert train_inputs.shape[0] == model.batch_size
     num_examples = tf.range(start=0, limit=model.batch_size)
     shuffle_indices = tf.random.shuffle(num_examples)
@@ -117,7 +118,7 @@ def train(model, train_inputs, train_labels, should_visualize_sr=False):
         loss = loss_function(train_labels, predicted_images)
     print("Loss", loss)
     if should_visualize_sr:
-        visualize_sr(train_inputs, predicted_images, train_labels)
+        visualize_sr(train_inputs, predicted_images, train_labels, epoch, batch_num)
     model.loss_list.append(loss)
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -162,8 +163,11 @@ def visualize_loss(losses):
 
 def main():
     # Read in Arctic DEM data
-    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/ArcticDEM_20m_lr', 'data/ArcticDEM_2m_hr')
-    model = CnnModel(upscale_factor=10)
+    lr_image_width, hr_image_width = 50, 100
+    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_10000_imgs',
+                                                                                lr_image_width, hr_image_width)
+
+    model = CnnModel(lr_image_width, hr_image_width)
 
     def get_batched(index, lr_images, hr_images):
         return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
@@ -174,7 +178,8 @@ def main():
         print('Epoch ', ep)
         for i in range(0, len(lr_train_images) - model.batch_size, model.batch_size):
             batched_lr_images, batched_hr_images = get_batched(i, lr_train_images, hr_train_images)
-            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=i == 0)
+            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=(i % 10 == 0), epoch=(ep + 1),
+                  batch_num=i + 1)
             # visualize_loss(model.loss_list)
 
 

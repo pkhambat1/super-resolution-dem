@@ -1,11 +1,11 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Reshape, Conv2D, Input, Lambda
+from tensorflow.keras.layers import Reshape, Conv2D, Input, Lambda, Dropout, MaxPool2D
 
 
 class CnnModel(tf.keras.Model):
-    def __init__(self, upscale_factor):
-        self.upscale_factor = int(upscale_factor)
+    def __init__(self, lr_image_width, hr_image_width):
+        self.upscale_factor = hr_image_width // lr_image_width
         """
         This model class will contain the architecture for your CNN that
         classifies images. We have left in variables in the constructor
@@ -14,8 +14,8 @@ class CnnModel(tf.keras.Model):
         super(CnnModel, self).__init__()
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
         self.batch_size = 54
-        self.W = 50  # img width
-        self.H = 50  # img height
+        self.W = lr_image_width  # img width
+        self.H = lr_image_width  # img height
         self.num_classes = 2
         self.loss_list = []  # Append losses to this list in training so you can visualize loss vs time in main
         self.conv_args = {
@@ -30,11 +30,13 @@ class CnnModel(tf.keras.Model):
                 Input(shape=(self.W, self.H, 1)),
                 Conv2D(64, kernel_size=5, **self.conv_args),
                 Conv2D(64, kernel_size=3, **self.conv_args),
-                # Conv2D(64, kernel_size=3, padding="same", activation='relu'),
-                # Conv2D(64, kernel_size=3, padding="same",activation='relu'),
-                # Conv2D(64, kernel_size=3, padding="same", activation='relu'),
+                Dropout(0.2),
+                Conv2D(64, kernel_size=3, **self.conv_args),
+                Conv2D(64, kernel_size=3, **self.conv_args),
+                Conv2D(64, kernel_size=3, **self.conv_args),
                 Conv2D(32, kernel_size=3, **self.conv_args),
                 Conv2D(self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
+                # MaxPool2D(pool_size=(3,3)),
                 Lambda(lambda x: tf.nn.depth_to_space(x, self.upscale_factor)),
                 # Lambda(lambda x: self.vgg19(x)),
                 Reshape(target_shape=(self.W * self.upscale_factor, self.H * self.upscale_factor))
