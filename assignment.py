@@ -90,8 +90,7 @@ def loss_function(label_images, predicted_images):
 
     label_images = tf.reshape(label_images, shape=(label_images.shape[0], -1))
     predicted_images = tf.reshape(predicted_images, shape=(predicted_images.shape[0], -1))
-    return tf.sqrt(mse(label_images, predicted_images))
-    # return .25 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + .75 * tf.sqrt(mse(label_images, predicted_images))
+    return .25 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + .75 * tf.sqrt(mse(label_images, predicted_images))
     # return tf_ssim(label, predicted_image)
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)

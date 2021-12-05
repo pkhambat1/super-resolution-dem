@@ -14,7 +14,7 @@ from skimage import io
 
 def get_data(hr_images_filepath, lr_image_width, hr_image_width):
     hr_images = []
-    for i, hr_filename in enumerate(sorted(os.listdir(hr_images_filepath))[:500]):  # TODO: Remove [:50] later
+    for i, hr_filename in enumerate(sorted(os.listdir(hr_images_filepath))[:1000]):  # TODO: Remove [:50] later
         if hr_filename.split('.')[-1] in {'TIF', 'tiff', 'tif'}:
             if i % 50 == 0:
                 print("loading image", i + 0)
