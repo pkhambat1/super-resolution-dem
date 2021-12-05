@@ -44,6 +44,7 @@ def loss_function(label_images, predicted_images):
         '''
         Mean square error
         '''
+        x = tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res)
         return tf.reduce_mean(tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res))
 
     def tf_fspecial_gauss(size, sigma):
@@ -87,8 +88,9 @@ def loss_function(label_images, predicted_images):
         psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0, name=None)
         return psnr
 
-    return 0.0 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + 1.0 * tf.sqrt(
-        mse(label_images, predicted_images))
+    label_images = tf.reshape(label_images, shape=(label_images.shape[0], -1))
+    predicted_images = tf.reshape(predicted_images, shape=(predicted_images.shape[0], -1))
+    return tf.sqrt(mse(label_images, predicted_images))
     # return .25 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + .75 * tf.sqrt(mse(label_images, predicted_images))
     # return tf_ssim(label, predicted_image)
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
@@ -98,12 +100,12 @@ def loss_function(label_images, predicted_images):
 def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
     fig, axs = plt.subplots(1, 3)
     fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
-    axs[0].imshow(input_images[0], cmap='gray')
     axs[0].set_title('LR Input')
-    axs[1].imshow(predicted_images[0], cmap='gray')
     axs[1].set_title('Predicted HR Output')
-    axs[2].imshow(train_labels[0], cmap='gray')
     axs[2].set_title('Actual HR Input')
+    axs[0].imshow(input_images[0]*255)
+    axs[1].imshow(predicted_images[0]*255)
+    axs[2].imshow(train_labels[0]*255)
     plt.show()
 
 
@@ -163,11 +165,12 @@ def visualize_loss(losses):
 
 def main():
     # Read in Arctic DEM data
-    lr_image_width, hr_image_width = 50, 100
-    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_10000_imgs',
+    lr_image_width, hr_image_width = 10, 100
+    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
                                                                                 lr_image_width, hr_image_width)
-
+    print('fetched images')
     model = CnnModel(lr_image_width, hr_image_width)
+    print('model constructed')
 
     def get_batched(index, lr_images, hr_images):
         return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
@@ -178,7 +181,7 @@ def main():
         print('Epoch ', ep)
         for i in range(0, len(lr_train_images) - model.batch_size, model.batch_size):
             batched_lr_images, batched_hr_images = get_batched(i, lr_train_images, hr_train_images)
-            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=(i % 10 == 0), epoch=(ep + 1),
+            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=(i == 0), epoch=(ep + 1),
                   batch_num=i + 1)
             # visualize_loss(model.loss_list)
 

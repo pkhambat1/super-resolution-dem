@@ -13,7 +13,7 @@ class CnnModel(tf.keras.Model):
         """
         super(CnnModel, self).__init__()
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
-        self.batch_size = 54
+        self.batch_size = 56
         self.W = lr_image_width  # img width
         self.H = lr_image_width  # img height
         self.num_classes = 2
@@ -26,20 +26,20 @@ class CnnModel(tf.keras.Model):
         # self.vgg19 = tf.keras.applications.vgg19.VGG19(input_shape=(500, 500, 1), include_top=False)
         self.feed_forward = keras.Sequential(
             [
-                Reshape(target_shape=(self.W, self.H, 1)),
-                Input(shape=(self.W, self.H, 1)),
+                # Reshape(target_shape=(self.W, self.H, 3)),
+                Input(shape=(self.W, self.H, 3)),
                 Conv2D(64, kernel_size=5, **self.conv_args),
-                Conv2D(64, kernel_size=3, **self.conv_args),
-                Dropout(0.2),
-                Conv2D(64, kernel_size=3, **self.conv_args),
-                Conv2D(64, kernel_size=3, **self.conv_args),
-                Conv2D(64, kernel_size=3, **self.conv_args),
-                Conv2D(32, kernel_size=3, **self.conv_args),
-                Conv2D(self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
+                # Conv2D(64, kernel_size=3, **self.conv_args),
+                # Dropout(0.2),
+                # Conv2D(64, kernel_size=3, **self.conv_args),
+                # MaxPool2D(pool_size=(3, 3)),
+                # Conv2D(64, kernel_size=3, **self.conv_args),
                 # MaxPool2D(pool_size=(3,3)),
+                # Conv2D(64, kernel_size=3, **self.conv_args),
+                Conv2D(32, kernel_size=3, **self.conv_args),
+                Conv2D(3 * self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
                 Lambda(lambda x: tf.nn.depth_to_space(x, self.upscale_factor)),
-                # Lambda(lambda x: self.vgg19(x)),
-                Reshape(target_shape=(self.W * self.upscale_factor, self.H * self.upscale_factor))
+                # Reshape(target_shape=(self.W * self.upscale_factor, self.H * self.upscale_factor, 3))
             ]
         )
 
