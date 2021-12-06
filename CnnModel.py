@@ -5,6 +5,8 @@ from tensorflow.keras.layers import Reshape, Conv2D, Input, Lambda, Dropout, Max
 
 class CnnModel(tf.keras.Model):
     def __init__(self, lr_image_width, hr_image_width):
+        if hr_image_width % lr_image_width != 0:
+            raise ValueError("hr_image_width must be divisible by lr_image_width")
         self.upscale_factor = hr_image_width // lr_image_width
         """
         This model class will contain the architecture for your CNN that
@@ -24,24 +26,41 @@ class CnnModel(tf.keras.Model):
             "padding": "same",
         }
         # self.vgg19 = tf.keras.applications.vgg19.VGG19(input_shape=(500, 500, 1), include_top=False)
-        self.feed_forward = keras.Sequential(
-            [
-                # Reshape(target_shape=(self.W, self.H, 3)),
-                Input(shape=(self.W, self.H, 3)),
-                Conv2D(64, kernel_size=5, **self.conv_args),
-                # Conv2D(64, kernel_size=3, **self.conv_args),
-                # Dropout(0.2),
-                # Conv2D(64, kernel_size=3, **self.conv_args),
-                # MaxPool2D(pool_size=(3, 3)),
-                # Conv2D(64, kernel_size=3, **self.conv_args),
-                # MaxPool2D(pool_size=(3,3)),
-                # Conv2D(64, kernel_size=3, **self.conv_args),
-                Conv2D(32, kernel_size=3, **self.conv_args),
-                Conv2D(3 * self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
-                Lambda(lambda x: tf.nn.depth_to_space(x, self.upscale_factor)),
-                # Reshape(target_shape=(self.W * self.upscale_factor, self.H * self.upscale_factor, 3))
-            ]
-        )
+        # self.feed_forward = keras.Sequential(
+        #     [
+        #         Input(shape=(self.W, self.H, 3)),
+        #         Conv2D(64, kernel_size=5, **self.conv_args),
+        #         Conv2D(32, kernel_size=3, **self.conv_args),
+        #         Conv2D(3 * self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
+        #         Lambda(lambda x: tf.nn.depth_to_space(x, self.upscale_factor)),
+        #     ]
+        # )
+
+        class Test(tf.keras.Model):
+            def __init__(self, lr_image_width, hr_image_width):
+                super(Test, self).__init__()
+                self.upscale_factor = hr_image_width // lr_image_width
+                self.W = lr_image_width
+                self.H = lr_image_width
+                self.conv_args = {
+                    "activation": "relu",
+                    "kernel_initializer": "Orthogonal",
+                    "padding": "same",
+                }
+                self.model = keras.Sequential(
+                    [
+                        # Input(shape=(self.W, self.H, 3)),
+                        Conv2D(64, kernel_size=5, **self.conv_args),
+                        Conv2D(32, kernel_size=3, **self.conv_args),
+                        Conv2D(3 * self.upscale_factor ** 2, kernel_size=3, **self.conv_args),
+                        Lambda(lambda x: tf.nn.depth_to_space(x, self.upscale_factor)),
+                    ]
+                )
+
+            def call(self, inputs):
+                return self.model(inputs)
+
+        self.test = Test(lr_image_width, hr_image_width)
 
     def call(self, inputs):
         """
@@ -51,4 +70,5 @@ class CnnModel(tf.keras.Model):
         :param is_testing: a boolean that should be set to True only when you're doing Part 2 of the assignment and this function is being called during testing
         :return: logits - a matrix of shape (num_inputs, num_classes); during training, it would be (batch_size, 2)
         """
-        return self.feed_forward(inputs)
+        return self.test.call(inputs)
+        # return self.feed_forward(inputs)

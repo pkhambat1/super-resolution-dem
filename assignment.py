@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from matplotlib import pyplot as plt
 
 from CnnModel import CnnModel
+from DownUpSample import DownUpSample
 from preprocess import get_data
 
 import tensorflow as tf
@@ -85,12 +86,18 @@ def loss_function(label_images, predicted_images):
         Adopted from "https://www.tensorflow.org/api_docs/python/tf/image/psnr"
 
         """
-        psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0, name=None)
+        mse = tf.keras.metrics.mean_absolute_error(tf.reshape(ori_high_res, (ori_high_res, -1)), tf.reshape(pred_high_res, (pred_high_res, -1)))
+        psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0)
         return psnr
 
-    label_images = tf.reshape(label_images, shape=(label_images.shape[0], -1))
-    predicted_images = tf.reshape(predicted_images, shape=(predicted_images.shape[0], -1))
-    return .25 * (1 - (1 + tf_ssim(label_images, predicted_images)) / 2) + .75 * tf.sqrt(mse(label_images, predicted_images))
+    # label_images = tf.reshape(label_images, shape=(label_images.shape[0], -1))
+    # predicted_images = tf.reshape(predicted_images, shape=(predicted_images.shape[0], -1))
+
+    # predicted_images = np.where(predicted_images > 1., 1., predicted_images)
+    # predicted_images = np.where(predicted_images < 0., 0., predicted_images)
+    psnr = tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
+    mse = tf.keras.metrics.mean_absolute_error(tf.reshape(label_images, (label_images.shape[0], -1)), tf.reshape(predicted_images, (predicted_images.shape[0], -1)))
+    return -tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
     # return tf_ssim(label, predicted_image)
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)
@@ -108,39 +115,39 @@ def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num)
     plt.show()
 
 
-def train(model, train_inputs, train_labels, should_visualize_sr, epoch, batch_num):
-    assert train_inputs.shape[0] == model.batch_size
+def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
+    assert x.shape[0] == model.batch_size
     num_examples = tf.range(start=0, limit=model.batch_size)
     shuffle_indices = tf.random.shuffle(num_examples)
-    train_inputs = tf.gather(train_inputs, shuffle_indices)
-    train_labels = tf.gather(train_labels, shuffle_indices)
+    x = tf.gather(x, shuffle_indices)
+    y_true = tf.gather(y_true, shuffle_indices)
     with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        predicted_images = model.call(train_inputs)
-        loss = loss_function(train_labels, predicted_images)
+        y_pred = model.call(x)
+        loss = loss_function(y_true, y_pred)
     print("Loss", loss)
     if should_visualize_sr:
-        visualize_sr(train_inputs, predicted_images, train_labels, epoch, batch_num)
-    model.loss_list.append(loss)
+        visualize_sr(x, y_pred, y_true, epoch, batch_num)
+    x = model.trainable_variables
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
-def test(model, test_inputs, test_labels):
+def test(model, x, y_true):
     """
     Tests the model on the test inputs and labels. You should NOT randomly
     flip images or do any extra preprocessing.
 
-    :param test_inputs: test data (all images to be tested),
+    :param x: test data (all images to be tested),
     shape (num_inputs, width, height, num_channels)
-    :param test_labels: test labels (all corresponding labels),
+    :param y_true: test labels (all corresponding labels),
     shape (num_labels, num_classes)
     :return: test accuracy - this should be the average accuracy across
     all batches
     """
 
     # preds = model.call(test_inputs, True)
-    preds = model.call(test_inputs, False)
-    accuracy = model.accuracy(preds, test_labels)
+    preds = model.call(x, False)
+    accuracy = model.accuracy(preds, y_true)
     return accuracy
 
 
@@ -164,11 +171,12 @@ def visualize_loss(losses):
 
 def main():
     # Read in Arctic DEM data
-    lr_image_width, hr_image_width = 10, 100
+    lr_image_width, hr_image_width = 64, 256
     lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
-                                                                                lr_image_width, hr_image_width)
+                                                                                lr_image_width, hr_image_width, 400)
     print('fetched images')
-    model = CnnModel(lr_image_width, hr_image_width)
+    # model = CnnModel(lr_image_width, hr_image_width)
+    model = DownUpSample(lr_image_width, hr_image_width)
     print('model constructed')
 
     def get_batched(index, lr_images, hr_images):
