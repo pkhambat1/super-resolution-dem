@@ -171,12 +171,12 @@ def visualize_loss(losses):
 
 def main():
     # Read in Arctic DEM data
-    lr_image_width, hr_image_width = 64, 256
+    lr_image_width, hr_image_width = 32, 128
     lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
-                                                                                lr_image_width, hr_image_width, 400)
+                                                                                lr_image_width, hr_image_width, 300)
     print('fetched images')
-    model = CnnModel(lr_image_width, hr_image_width)
-    # model = DownUpSample(lr_image_width, hr_image_width)
+    # model = CnnModel(lr_image_width, hr_image_width)
+    model = DownUpSample(lr_image_width, hr_image_width)
     print('model constructed')
 
     def get_batched(index, lr_images, hr_images):
