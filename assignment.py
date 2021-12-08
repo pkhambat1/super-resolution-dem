@@ -15,80 +15,76 @@ from keras.applications.vgg16 import VGG16
 def accuracy(y_true, y_pred):
     return tf.reduce_mean(tf.image.psnr(y_true, y_pred, max_val=1.))
 
-def loss_function(label_images, predicted_images):
-    def tf_ssim_multiscale(ori_high_res, pred_high_res):
-        ori_high_res = tf.expand_dims(ori_high_res, axis=3)
-        pred_high_res = tf.expand_dims(pred_high_res, axis=3)
-        print('start')
-        print('tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.)',
-              tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.))
-        return tf.reduce_mean(tf.image.ssim_multiscale(ori_high_res, pred_high_res, max_val=1.))
-
-    def tf_ssim(ori_high_res, pred_high_res):
-        return tf.reduce_mean(tf.image.ssim(ori_high_res, pred_high_res, max_val=1.))
-
-    def mse(ori_high_res, pred_high_res):
+def loss_function(y_pred, y_true):
+    def total_variation_loss(image):
         '''
-        Mean square error
-        '''
-        x = tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res)
-        return tf.reduce_mean(tf.keras.metrics.mean_squared_error(ori_high_res, pred_high_res))
-
-    def tf_fspecial_gauss(size, sigma):
-        """Function to mimic the 'fspecial' gaussian MATLAB function
-        :param size:
-        :param sigma:
+        To reduce image noise - https://medium.com/@shwetaka1988/a-complete-step-wise-guide-on-neural-style-transfer-9f60b22b4f75
+        :param image:
         :return:
-        """
-        x_data, y_data = np.mgrid[-size // 2 + 1:size // 2 + 1, -size // 2 + 1:size // 2 + 1]
-
-        x_data = np.expand_dims(x_data, axis=-1)
-        x_data = np.expand_dims(x_data, axis=-1)
-
-        y_data = np.expand_dims(y_data, axis=-1)
-        y_data = np.expand_dims(y_data, axis=-1)
-
-        x = tf.constant(x_data, dtype=tf.float32)
-        y = tf.constant(y_data, dtype=tf.float32)
-
-        g = tf.exp(-((x ** 2 + y ** 2) / (2.0 * sigma ** 2)))
-        return g / tf.reduce_sum(g)
-
-    def mae(ori_high_res, pred_high_res):
         '''
-        mean absolute error
-        '''
-        # mae = tf.keras.losses.MeanAbsoluteError(reduction=tf.keras.losses.Reduction.MEAN)
-        # #print(mae)
-        # mean_ae=tf.reduce_mean(mae(ori_high_res, pred_high_res).numpy())
-        # print (mean_ae)
-        mae = tf.keras.metrics.mean_absolute_error(ori_high_res, pred_high_res)
-        return tf.reduce_mean(mae)
 
-    def tf_psnr(ori_high_res, pred_high_res):
-        """
-        PSNR is Peek Signal to Noise Ratio, which is similar to mean squared error.
+        def high_pass_x_y(image):
+            x_var = image[:, :, 1:, :] - image[:, :, :-1, :]
+            y_var = image[:, 1:, :, :] - image[:, :-1, :, :]
+            return x_var, y_var
 
-        Adopted from "https://www.tensorflow.org/api_docs/python/tf/image/psnr"
+        x_deltas, y_deltas = high_pass_x_y(image)
+        return tf.reduce_mean(x_deltas ** 2) + tf.reduce_mean(y_deltas ** 2)
 
-        """
-        mse = tf.keras.metrics.mean_absolute_error(tf.reshape(ori_high_res, (ori_high_res, -1)),
-                                                   tf.reshape(pred_high_res, (pred_high_res, -1)))
-        psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0)
-        return psnr
+    def get_activation_map(images, conv_layer='block1_conv1', should_visualize=False):
+        images = tf.image.resize(images, (224, 224))
+        layer_names = ['block1_conv1', 'block2_conv1', 'block3_conv1', 'block4_conv1', 'block5_conv1']
+        # layer_names = ['block1_conv1']
+        intermediate_layer_model = tf.keras.Model(inputs=vgg19.input,
+                                                  outputs=[vgg19.get_layer(conv_layer).output for conv_layer in
+                                                           layer_names])
+        intermediate_outputs = intermediate_layer_model(images)
+        if should_visualize:
+            for intermediate_output in intermediate_outputs:
+                fig, axes = plt.subplots(8, 8, figsize=(12, 12))
+                for i in range(64):
+                    for j in range(images.shape[0]):
+                        axes[int(i / 8), i % 8].imshow(intermediate_output[j, :, :, i])
+                plt.show()
+        return intermediate_outputs
 
-    # label_images = tf.reshape(label_images, shape=(label_images.shape[0], -1))
-    # predicted_images = tf.reshape(predicted_images, shape=(predicted_images.shape[0], -1))
+    # y_pred_features_list = get_activation_map(y_pred)
+    # y_true_features_list = get_activation_map(y_true)
+    # var_loss = total_variation_loss(y_pred)
+    # content_loss = tf.reduce_mean(
+    #     [-tf.reduce_mean(tf.image.psnr(y_pred_feature, y_true_feature, max_val=1.)) for y_pred_feature, y_true_feature
+    #      in zip(y_pred_features_list, y_true_features_list)])
+    image_loss = -tf.reduce_mean(tf.image.psnr(y_pred, y_true, max_val=1.))
+    # return .50 * image_loss + .25 * content_loss + .25 * var_loss
+    return image_loss
 
-    # predicted_images = np.where(predicted_images > 1., 1., predicted_images)
-    # predicted_images = np.where(predicted_images < 0., 0., predicted_images)
-    psnr = tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
-    mse = tf.keras.metrics.mean_absolute_error(tf.reshape(label_images, (label_images.shape[0], -1)),
-                                               tf.reshape(predicted_images, (predicted_images.shape[0], -1)))
-    return -tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
-    # return tf_ssim(label, predicted_image)
-    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
-    # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - (1 + tf_ssim(label, predicted_image)) / 2)
+
+# def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
+#     fig, axs = plt.subplots(1, 3)
+#     fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
+#     axs[0].set_title('LR Input')
+#     axs[1].set_title('Predicted HR Output')
+#     axs[2].set_title('Actual HR Input')
+#     axs[0].imshow(input_images[0] * 255)
+#     axs[1].imshow(predicted_images[0] * 255)
+#     axs[2].imshow(train_labels[0] * 255)
+#     plt.show()
+
+
+def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
+    assert x.shape[0] == model.batch_size
+    num_examples = tf.range(start=0, limit=model.batch_size)
+    shuffle_indices = tf.random.shuffle(num_examples)
+    x = tf.gather(x, shuffle_indices)
+    y_true = tf.gather(y_true, shuffle_indices)
+    with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
+        y_pred = model.call(x)
+        loss = loss_function(y_true, y_pred)
+    print("Loss", loss)
+    if should_visualize_sr:
+        visualize_sr(x, y_pred, y_true, epoch, batch_num)
+    gradients = tape.gradient(loss, model.trainable_variables)
+    model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
 def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
@@ -131,24 +127,6 @@ def visualize_tst_sr(input_images, predicted_images, test_labels):
     plt.colorbar(d, ax=axs[1, 1])
     fig.tight_layout(pad=3)
     plt.show()
-
-
-def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
-    assert x.shape[0] == model.batch_size
-    num_examples = tf.range(start=0, limit=model.batch_size)
-    shuffle_indices = tf.random.shuffle(num_examples)
-    x = tf.gather(x, shuffle_indices)
-    y_true = tf.gather(y_true, shuffle_indices)
-    with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
-        y_pred = model.call(x)
-        loss = loss_function(y_true, y_pred)
-    print("Loss", loss)
-    if should_visualize_sr:
-        visualize_sr(x, y_pred, y_true, epoch, batch_num)
-    x = model.trainable_variables
-    gradients = tape.gradient(loss, model.trainable_variables)
-    model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
 
 def test(model, x, y_true):
     """
