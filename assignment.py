@@ -12,22 +12,8 @@ import numpy as np
 from keras.applications.vgg16 import VGG16
 
 
-def accuracy(logits, labels):
-    """
-        Calculates the model's prediction accuracy by comparing
-        logits to correct labels – no need to modify this.
-
-        :param logits: a matrix of size (num_inputs, self.num_classes); during training, this will be (batch_size, self.num_classes)
-        containing the result of multiple convolution and feed forward layers
-        :param labels: matrix of size (num_labels, self.num_classes) containing the answers, during training, this will be (batch_size, self.num_classes)
-
-        NOTE: DO NOT EDIT
-
-        :return: the accuracy of the model as a Tensor
-        """
-    correct_predictions = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
-    return tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
-
+def accuracy(y_true, y_pred):
+    return tf.reduce_mean(tf.image.psnr(y_true, y_pred, max_val=1.))
 
 def loss_function(label_images, predicted_images):
     def tf_ssim_multiscale(ori_high_res, pred_high_res):
@@ -86,7 +72,8 @@ def loss_function(label_images, predicted_images):
         Adopted from "https://www.tensorflow.org/api_docs/python/tf/image/psnr"
 
         """
-        mse = tf.keras.metrics.mean_absolute_error(tf.reshape(ori_high_res, (ori_high_res, -1)), tf.reshape(pred_high_res, (pred_high_res, -1)))
+        mse = tf.keras.metrics.mean_absolute_error(tf.reshape(ori_high_res, (ori_high_res, -1)),
+                                                   tf.reshape(pred_high_res, (pred_high_res, -1)))
         psnr = tf.image.psnr(ori_high_res, pred_high_res, max_val=1.0)
         return psnr
 
@@ -96,7 +83,8 @@ def loss_function(label_images, predicted_images):
     # predicted_images = np.where(predicted_images > 1., 1., predicted_images)
     # predicted_images = np.where(predicted_images < 0., 0., predicted_images)
     psnr = tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
-    mse = tf.keras.metrics.mean_absolute_error(tf.reshape(label_images, (label_images.shape[0], -1)), tf.reshape(predicted_images, (predicted_images.shape[0], -1)))
+    mse = tf.keras.metrics.mean_absolute_error(tf.reshape(label_images, (label_images.shape[0], -1)),
+                                               tf.reshape(predicted_images, (predicted_images.shape[0], -1)))
     return -tf.reduce_mean(tf.image.psnr(label_images, predicted_images, max_val=1.))
     # return tf_ssim(label, predicted_image)
     # return 0.75 * tf.sqrt(mse(label, predicted_image)) + 0.25 * (1 - tf_ssim(label, predicted_image)) ## not working great
@@ -104,45 +92,45 @@ def loss_function(label_images, predicted_images):
 
 
 def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
-    fig, axs = plt.subplots(2, 2,figsize=(6,6))
-    difference = train_labels-predicted_images
+    fig, axs = plt.subplots(2, 2, figsize=(6, 6))
+    difference = train_labels - predicted_images
     fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
-    axs[0,0].set_title('LR Input')
-    axs[0,1].set_title('Predicted HR Output')
-    axs[1,0].set_title('Actual HR Input')
+    axs[0, 0].set_title('LR Input')
+    axs[0, 1].set_title('Predicted HR Output')
+    axs[1, 0].set_title('Actual HR Input')
     axs[1, 1].set_title('differences(ori-pred)')
-    a = axs[0,0].imshow(input_images[0]*255,cmap='brg')
-    plt.colorbar(a, ax=axs[0,0])
-    b = axs[0,1].imshow(predicted_images[0]*255,cmap='brg')
-    plt.colorbar(b, ax=axs[0,1])
-    c = axs[1,0].imshow(train_labels[0]*255,cmap='brg')
-    plt.colorbar(c, ax=axs[1,0])
-    d = axs[1,1].imshow(difference[0] * 255,cmap='brg')
-    plt.colorbar(d, ax=axs[1,1])
+    a = axs[0, 0].imshow(input_images[0] * 255, cmap='brg')
+    plt.colorbar(a, ax=axs[0, 0])
+    b = axs[0, 1].imshow(predicted_images[0] * 255, cmap='brg')
+    plt.colorbar(b, ax=axs[0, 1])
+    c = axs[1, 0].imshow(train_labels[0] * 255, cmap='brg')
+    plt.colorbar(c, ax=axs[1, 0])
+    d = axs[1, 1].imshow(difference[0] * 255, cmap='brg')
+    plt.colorbar(d, ax=axs[1, 1])
     fig.tight_layout(pad=3)
-    #plt.colorbar()
+    # plt.colorbar()
     plt.show()
+
 
 def visualize_tst_sr(input_images, predicted_images, test_labels):
-    fig, axs = plt.subplots(2, 2,figsize=(6,6))
-    difference = test_labels-predicted_images
+    fig, axs = plt.subplots(2, 2, figsize=(6, 6))
+    difference = test_labels - predicted_images
     fig.suptitle("Visualizing SR for epoch")
     plt.figure(figsize=(16, 12))
-    axs[0,0].set_title('LR Input')
-    axs[0,1].set_title('Predicted HR Output')
-    axs[1,0].set_title('Actual HR Input')
+    axs[0, 0].set_title('LR Input')
+    axs[0, 1].set_title('Predicted HR Output')
+    axs[1, 0].set_title('Actual HR Input')
     axs[1, 1].set_title('differences(ori-pred)')
-    a=axs[0,0].imshow(input_images[0]*255)
-    plt.colorbar(a, ax=axs[0,0])
-    b=axs[0,1].imshow(predicted_images[0]*255)
-    plt.colorbar(b, ax=axs[0,1])
-    c=axs[1,0].imshow(test_labels[0]*255)
-    plt.colorbar(c, ax=axs[1,0])
-    d=axs[1,1].imshow(difference[0] * 255)
-    plt.colorbar(d, ax=axs[1,1])
+    a = axs[0, 0].imshow(input_images[0] * 255)
+    plt.colorbar(a, ax=axs[0, 0])
+    b = axs[0, 1].imshow(predicted_images[0] * 255)
+    plt.colorbar(b, ax=axs[0, 1])
+    c = axs[1, 0].imshow(test_labels[0] * 255)
+    plt.colorbar(c, ax=axs[1, 0])
+    d = axs[1, 1].imshow(difference[0] * 255)
+    plt.colorbar(d, ax=axs[1, 1])
     fig.tight_layout(pad=3)
     plt.show()
-
 
 
 def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
@@ -178,7 +166,7 @@ def test(model, x, y_true):
     # preds = model.call(test_inputs, True)
     preds = model.call(x, True)
     accuracy = model.accuracy(preds, y_true)
-    model.visualize_test_sr(x, preds, y_true)
+    visualize_tst_sr(x, preds, y_true)
     return accuracy
 
 
@@ -203,8 +191,9 @@ def visualize_loss(losses):
 def main():
     # Read in Arctic DEM data
     lr_image_width, hr_image_width = 32, 128
-    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\composite_database',
-                                                                                lr_image_width, hr_image_width, 300)
+    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data(
+        'H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\composite_database',
+        lr_image_width, hr_image_width, 300)
     print('fetched images')
     # model = CnnModel(lr_image_width, hr_image_width)
     model = DownUpSample(lr_image_width, hr_image_width)
@@ -222,8 +211,8 @@ def main():
             train(model, batched_lr_images, batched_hr_images, should_visualize_sr=(i == 0), epoch=(ep + 1),
                   batch_num=i + 1)
             # visualize_loss(model.loss_list)
-    accuracy = test(model,lr_test_images,hr_test_images)
-    print (accuracy)
+    accuracy = test(model, lr_test_images, hr_test_images)
+    print(accuracy)
 
 
 if __name__ == '__main__':
