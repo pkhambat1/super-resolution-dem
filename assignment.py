@@ -15,6 +15,7 @@ from keras.applications.vgg16 import VGG16
 def accuracy(y_true, y_pred):
     return tf.reduce_mean(tf.image.psnr(y_true, y_pred, max_val=1.))
 
+
 def loss_function(y_pred, y_true):
     def total_variation_loss(image):
         '''
@@ -59,16 +60,16 @@ def loss_function(y_pred, y_true):
     return image_loss
 
 
-# def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
-#     fig, axs = plt.subplots(1, 3)
-#     fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
-#     axs[0].set_title('LR Input')
-#     axs[1].set_title('Predicted HR Output')
-#     axs[2].set_title('Actual HR Input')
-#     axs[0].imshow(input_images[0] * 255)
-#     axs[1].imshow(predicted_images[0] * 255)
-#     axs[2].imshow(train_labels[0] * 255)
-#     plt.show()
+def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
+    fig, axs = plt.subplots(1, 3)
+    fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
+    axs[0].set_title('LR Input')
+    axs[1].set_title('Predicted HR Output')
+    axs[2].set_title('Actual HR Input')
+    axs[0].imshow(input_images[0] * 255)
+    axs[1].imshow(predicted_images[0] * 255)
+    axs[2].imshow(train_labels[0] * 255)
+    plt.show()
 
 
 def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
@@ -87,47 +88,6 @@ def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
-def visualize_sr(input_images, predicted_images, train_labels, epoch, batch_num):
-    fig, axs = plt.subplots(2, 2, figsize=(6, 6))
-    difference = train_labels - predicted_images
-    fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
-    axs[0, 0].set_title('LR Input')
-    axs[0, 1].set_title('Predicted HR Output')
-    axs[1, 0].set_title('Actual HR Input')
-    axs[1, 1].set_title('differences(ori-pred)')
-    a = axs[0, 0].imshow(input_images[0] * 255, cmap='brg')
-    plt.colorbar(a, ax=axs[0, 0])
-    b = axs[0, 1].imshow(predicted_images[0] * 255, cmap='brg')
-    plt.colorbar(b, ax=axs[0, 1])
-    c = axs[1, 0].imshow(train_labels[0] * 255, cmap='brg')
-    plt.colorbar(c, ax=axs[1, 0])
-    d = axs[1, 1].imshow(difference[0] * 255, cmap='brg')
-    plt.colorbar(d, ax=axs[1, 1])
-    fig.tight_layout(pad=3)
-    # plt.colorbar()
-    plt.show()
-
-
-def visualize_tst_sr(input_images, predicted_images, test_labels):
-    fig, axs = plt.subplots(2, 2, figsize=(6, 6))
-    difference = test_labels - predicted_images
-    fig.suptitle("Visualizing SR for epoch")
-    plt.figure(figsize=(16, 12))
-    axs[0, 0].set_title('LR Input')
-    axs[0, 1].set_title('Predicted HR Output')
-    axs[1, 0].set_title('Actual HR Input')
-    axs[1, 1].set_title('differences(ori-pred)')
-    a = axs[0, 0].imshow(input_images[0] * 255)
-    plt.colorbar(a, ax=axs[0, 0])
-    b = axs[0, 1].imshow(predicted_images[0] * 255)
-    plt.colorbar(b, ax=axs[0, 1])
-    c = axs[1, 0].imshow(test_labels[0] * 255)
-    plt.colorbar(c, ax=axs[1, 0])
-    d = axs[1, 1].imshow(difference[0] * 255)
-    plt.colorbar(d, ax=axs[1, 1])
-    fig.tight_layout(pad=3)
-    plt.show()
-
 def test(model, x, y_true):
     """
     Tests the model on the test inputs and labels. You should NOT randomly
@@ -144,7 +104,7 @@ def test(model, x, y_true):
     # preds = model.call(test_inputs, True)
     preds = model.call(x, True)
     accuracy = model.accuracy(preds, y_true)
-    visualize_tst_sr(x, preds, y_true)
+    visualize_sr(x, preds, y_true)
     return accuracy
 
 
@@ -168,10 +128,9 @@ def visualize_loss(losses):
 
 def main():
     # Read in Arctic DEM data
-    lr_image_width, hr_image_width = 32, 128
-    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data(
-        'H:\Shared drives\BU_DEMSuperRes_NW\super-resolution-dem\data\composite_database',
-        lr_image_width, hr_image_width, 300)
+    lr_image_width, hr_image_width = 32, 256
+    lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
+                                                                                lr_image_width, hr_image_width, 500)
     print('fetched images')
     # model = CnnModel(lr_image_width, hr_image_width)
     model = DownUpSample(lr_image_width, hr_image_width)
@@ -186,7 +145,7 @@ def main():
         print('Epoch ', ep)
         for i in range(0, len(lr_train_images) - model.batch_size, model.batch_size):
             batched_lr_images, batched_hr_images = get_batched(i, lr_train_images, hr_train_images)
-            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=(i == 0), epoch=(ep + 1),
+            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=True, epoch=(ep + 1),
                   batch_num=i + 1)
             # visualize_loss(model.loss_list)
     accuracy = test(model, lr_test_images, hr_test_images)
