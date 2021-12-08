@@ -4,6 +4,7 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 
 from DownUpSample import DownUpSample
+from CnnModel import CnnModel
 from preprocess import get_data
 
 vgg19 = tf.keras.applications.vgg19.VGG19(include_top=False, weights='imagenet', input_tensor=None, input_shape=None,
@@ -73,11 +74,12 @@ def visualize_sr(input_images, predicted_images, true_images, epoch=None, batch_
 
 def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
     assert x.shape[0] == model.batch_size
+    # do shuffle
     num_examples = tf.range(start=0, limit=model.batch_size)
     shuffle_indices = tf.random.shuffle(num_examples)
     x = tf.gather(x, shuffle_indices)
     y_true = tf.gather(y_true, shuffle_indices)
-    with tf.GradientTape() as tape:  # init GT. model fwd prop monitored.
+    with tf.GradientTape() as tape:
         y_pred = model.call(x)
         loss = loss_function(y_true, y_pred)
     print("Loss", loss)
@@ -103,7 +105,7 @@ def test(model, x, y_true):
     for i in range(0, len(x) - model.batch_size, model.batch_size):
         batched_x, batched_y_true = get_batched(model, i, x, y_true)
         batched_y_preds = model.call(batched_x)
-        visualize_sr(batched_y_preds, batched_y_true)
+        visualize_sr(batched_x, batched_y_preds, batched_y_true)
         batch_accuracy = accuracy(batched_y_preds, batched_y_true)
         accuracy_list.append(batch_accuracy)
     return tf.reduce_mean(accuracy_list)
@@ -133,7 +135,7 @@ def main():
     # Read in Arctic DEM data
     lr_image_width, hr_image_width = 32, 256
     lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
-                                                                                lr_image_width, hr_image_width, 400)
+                                                                                lr_image_width, hr_image_width)
     print('fetched images')
     model = CnnModel(lr_image_width, hr_image_width)
     # model = DownUpSample(lr_image_width, hr_image_width)
@@ -149,7 +151,7 @@ def main():
                   batch_num=i + 1)
             # visualize_loss(model.loss_list)
     total_accuracy = test(model, lr_test_images, hr_test_images)
-    print(total_accuracy)
+    print('Model accuracy (PSNR)', total_accuracy)
 
 
 if __name__ == '__main__':
