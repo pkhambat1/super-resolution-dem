@@ -5,8 +5,8 @@ from tensorflow.keras.layers import Reshape, Conv2D, Input, Lambda, Dropout, Max
 
 class CnnModel(tf.keras.Model):
     def __init__(self, lr_image_width, hr_image_width):
-        if hr_image_width % lr_image_width != 0:
-            raise ValueError("hr_image_width must be divisible by lr_image_width")
+        # if hr_image_width % lr_image_width != 0:
+        #     raise ValueError("hr_image_width must be divisible by lr_image_width")
         self.upscale_factor = hr_image_width // lr_image_width
         """
         This model class will contain the architecture for your CNN that
@@ -27,6 +27,7 @@ class CnnModel(tf.keras.Model):
         self.feed_forward = keras.Sequential(
             [
                 Input(shape=(self.W, self.H, 3)),
+                Conv2D(64, kernel_size=5, **self.conv_args),
                 Conv2D(64, kernel_size=5, **self.conv_args),
                 Conv2D(32, kernel_size=3, **self.conv_args),
                 Conv2D(3 * self.upscale_factor ** 2, kernel_size=3, **self.conv_args),

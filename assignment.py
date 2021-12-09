@@ -3,12 +3,15 @@ from __future__ import absolute_import
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-from DownUpSample import DownUpSample
+from ProgressingUpsampleCnn import ProgressiveUpsampleCnn
+from PreUpsampleCnn import PreUpsampleCnn
+from _PostUpsampleCnn import PostUpsampleCnn
 from CnnModel import CnnModel
 from preprocess import get_data
 
 vgg19 = tf.keras.applications.vgg19.VGG19(include_top=False, weights='imagenet', input_tensor=None, input_shape=None,
                                           pooling=None, classes=1000)
+
 
 def accuracy(y_pred, y_true):
     return tf.reduce_mean(tf.image.psnr(y_true, y_pred, max_val=1.))
@@ -46,20 +49,20 @@ def loss_function(y_pred, y_true):
                 plt.show()
         return intermediate_outputs
 
+    # var_loss = total_variation_loss(y_pred)
     # y_pred_features_list = get_activation_map(y_pred)
     # y_true_features_list = get_activation_map(y_true)
-    # var_loss = total_variation_loss(y_pred)
     # content_loss = tf.reduce_mean(
     #     [-tf.reduce_mean(tf.image.psnr(y_pred_feature, y_true_feature, max_val=1.)) for y_pred_feature, y_true_feature
     #      in zip(y_pred_features_list, y_true_features_list)])
     image_loss = -tf.reduce_mean(tf.image.psnr(y_pred, y_true, max_val=1.))
-    # return .50 * image_loss + .25 * content_loss + .25 * var_loss
+    # return .75 * image_loss + .25 * content_loss
     return image_loss
 
 
 def visualize_sr(input_images, predicted_images, true_images, epoch=None, batch_num=None):
     fig, axs = plt.subplots(1, 3)
-    if epoch and batch_num:
+    if epoch is not None and batch_num is not None:
         fig.suptitle("Visualizing SR for epoch " + str(epoch) + ", batch num " + str(batch_num))
     else:
         fig.suptitle("Visualizing SR")
@@ -72,7 +75,7 @@ def visualize_sr(input_images, predicted_images, true_images, epoch=None, batch_
     plt.show()
 
 
-def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
+def train(model, x, y_true, should_visualize_sr=False, epoch=None, batch_num=None):
     assert x.shape[0] == model.batch_size
     # do shuffle
     num_examples = tf.range(start=0, limit=model.batch_size)
@@ -85,6 +88,7 @@ def train(model, x, y_true, should_visualize_sr, epoch, batch_num):
     print("Loss", loss)
     if should_visualize_sr:
         visualize_sr(x, y_pred, y_true, epoch, batch_num)
+    x = model.trainable_variables
     gradients = tape.gradient(loss, model.trainable_variables)
     model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
@@ -128,26 +132,30 @@ def visualize_loss(losses):
     plt.ylabel('Loss')
     plt.show()
 
+
 def get_batched(model, index, lr_images, hr_images):
     return lr_images[index:index + model.batch_size], hr_images[index:index + model.batch_size]
 
+
 def main():
     # Read in Arctic DEM data
-    lr_image_width, hr_image_width = 32, 256
+    lr_image_width, hr_image_width = 32, 288
     lr_train_images, lr_test_images, hr_train_images, hr_test_images = get_data('data/arctic_dem_2m_2500_composite',
                                                                                 lr_image_width, hr_image_width)
     print('fetched images')
-    model = CnnModel(lr_image_width, hr_image_width)
-    # model = DownUpSample(lr_image_width, hr_image_width)
+    # model = CnnModel(lr_image_width, hr_image_width)
+    # model = PreUpsampleCnn(lr_image_width, hr_image_width)
+    model = ProgressiveUpsampleCnn(lr_image_width, hr_image_width, lr_train_images, hr_train_images)
+    # model = PostUpsampleCnn(lr_image_width, hr_image_width)
     print('model constructed')
 
-    NUM_EPOCHS = 2
+    NUM_EPOCHS = 50
     for ep in range(NUM_EPOCHS):
         # for each batch
         print('Epoch ', ep)
         for i in range(0, len(lr_train_images) - model.batch_size, model.batch_size):
             batched_lr_images, batched_hr_images = get_batched(model, i, lr_train_images, hr_train_images)
-            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=True, epoch=(ep + 1),
+            train(model, batched_lr_images, batched_hr_images, should_visualize_sr=i == 0, epoch=ep,
                   batch_num=i + 1)
             # visualize_loss(model.loss_list)
     total_accuracy = test(model, lr_test_images, hr_test_images)
